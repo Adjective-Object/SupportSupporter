@@ -27,17 +27,30 @@ public class Runner implements NativeKeyListener , ActionListener, WindowListene
 
 	ArrayList<Object[]> tempBuffs;//Image(JLabel), text(JtextPane), time(double)
 	
-	Color CHILLCOLOR  = Color.BLUE;
-	Color WARNINGCOLOR= Color.orange;
+	Color CHILLCOLOR  = Color.blue;
+	Color WARNINGCOLOR= Color.yellow;
 	Color DANGERCOLOR = Color.red;
-	Color NULLCOLOR   = Color.gray;
+	Color NULLCOLOR   = Color.black;
+	
+
+	Color FRIENDCOLOR  = new Color(200,200,250);
+	Color ENEMYCOLOR   = new Color(250,200,200);
 	
 	JPanel mainPanel;
+	JFrame frame;
+	boolean isShifted = false;
 	
 	int timeResolution=50;
 	ArrayList<Integer> lastPressed = new ArrayList<Integer>(0);
 	ArrayList<NativeKeyEvent> timerKeys;
 	Font font;
+	
+	GridBagConstraints gridConstraints;
+	
+	int winWidth = 120;
+	int winHeightMin = 55;
+	int winHeightEach = 26;
+	int gridy=0;
 	
     /**
      * Create the GUI and show it.  For thread safety,
@@ -46,11 +59,12 @@ public class Runner implements NativeKeyListener , ActionListener, WindowListene
      */
     private void createAndShowGUI() {
         //Create and set up the window.
-        JFrame frame = new JFrame("Lol Timer");
-        frame.setPreferredSize(new Dimension(100,650));
-        frame.setResizable(true);
+        frame = new JFrame("Lol Timer");
+        frame.setPreferredSize(new Dimension(winWidth,winHeightMin));
+        frame.setResizable(false);
+        frame.setAlwaysOnTop(true);
         frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
-        
+
         frame.addWindowListener(this);
         
         rawBuffImages = new ArrayList<Image>(0);
@@ -79,22 +93,26 @@ public class Runner implements NativeKeyListener , ActionListener, WindowListene
         buffKeybindings.add(new Integer(NativeKeyEvent.VK_END));
         
         rawBuffImages.add(getImage("Vision_Ward.gif"));
-        rawBuffTimes.add(new Long(3*60));
-        buffKeybindings.add(new Integer(NativeKeyEvent.VK_PAGE_DOWN));
-        
-        rawBuffImages.add(getImage("Vision_Ward.gif"));
-        rawBuffTimes.add(new Long(5000));
+        rawBuffTimes.add(new Long(3*60000));
         buffKeybindings.add(new Integer(NativeKeyEvent.VK_PAGE_DOWN));
 
         tempBuffs = new ArrayList<Object[]>(0);
         timerKeys = new ArrayList<NativeKeyEvent>(0);
         mainPanel = new JPanel();
         
+        mainPanel.setLayout(new GridBagLayout());
+        
+        gridConstraints = new GridBagConstraints();
+	    gridConstraints.weightx = 1;
+	    gridConstraints.weighty = 1;
+
         font = new Font("Sans-Serif", Font.BOLD, 12);
         
         Timer display = new Timer(timeResolution, this);
         display.setActionCommand("Update_Display");
         display.start();
+        
+        mainPanel.setSize(new Dimension(120,400));
         
         //Display the window
         frame.add(mainPanel);
@@ -119,25 +137,43 @@ public class Runner implements NativeKeyListener , ActionListener, WindowListene
 
 	@Override
 	public void nativeKeyPressed(NativeKeyEvent ke) {
-		System.out.println(ke.getID());
 		for(int i=0; i<buffKeybindings.size(); i++){
 			if(ke.getKeyCode()==buffKeybindings.get(i)){
 				lastPressed.add(i);
 			}
+		}
+		if(ke.getKeyCode()==NativeKeyEvent.VK_SHIFT){
+			this.isShifted=true;
+		}
+	}
+	
+	@Override
+	public void nativeKeyReleased(NativeKeyEvent ke) {
+		if(ke.getKeyCode()==NativeKeyEvent.VK_SHIFT){
+			this.isShifted=false;
 		}
 	}
 	
 	@Override
 	public void actionPerformed(ActionEvent e) {
 		while (lastPressed.size()>0){
-			System.out.println(lastPressed.get(0));
 			if(lastPressed.get(0)!=-1){
-				Object[] p = makeNewTimer(lastPressed.get(0));
+				Object[] p = makeNewTimer(lastPressed.get(0),!this.isShifted);
 				tempBuffs.add(p);
-				mainPanel.add((JLabel)p[0]);
-				mainPanel.add((JTextPane)p[1]);
+				
+				System.out.println(this.gridy);
+
+				gridConstraints.fill = GridBagConstraints.NONE;
+				gridConstraints.gridy=this.gridy;
+				gridConstraints.gridx=0;
+				mainPanel.add((JLabel)p[0],gridConstraints);
+				gridConstraints.gridx=1;
+				gridConstraints.fill = GridBagConstraints.REMAINDER;
+				mainPanel.add((JTextPane)p[1],gridConstraints);
+				
 				mainPanel.revalidate();
 				mainPanel.repaint();
+				this.gridy++;
 			}
 			else{
 				killTimer(tempBuffs.size()-1);
@@ -150,7 +186,7 @@ public class Runner implements NativeKeyListener , ActionListener, WindowListene
 		} 
 	}
 	
-	protected Object[] makeNewTimer(int timerType){
+	protected Object[] makeNewTimer(int timerType, boolean enemy){
 		Object[] timerBlock = new Object[3];
 		
     	JLabel l = new JLabel( new ImageIcon(rawBuffImages.get(timerType)), JLabel.LEFT);
@@ -161,9 +197,17 @@ public class Runner implements NativeKeyListener , ActionListener, WindowListene
     	t.setText("NEW_TIMER");
         t.setForeground(this.CHILLCOLOR);
         timerBlock[1]=t;
+    	
+    	if(enemy){
+    		t.setBackground(ENEMYCOLOR);
+    	}
+    	else{
+    		t.setBackground(FRIENDCOLOR);
+    	}
         
         timerBlock[2]=new Long(System.currentTimeMillis()+rawBuffTimes.get(timerType));
         
+        frame.setBounds(frame.getX(), frame.getY(), winWidth, winHeightMin+winHeightEach*tempBuffs.size());
     	return timerBlock;
 	}
 	
@@ -174,6 +218,8 @@ public class Runner implements NativeKeyListener , ActionListener, WindowListene
 		lab.getParent().remove(lab);
 		tempBuffs.remove(i);
 		i--;
+		frame.setBounds(frame.getX(), frame.getY(), winWidth, winHeightMin+winHeightEach*tempBuffs.size());
+		gridy--;
 	}
 	
 	public void updateDisplays(long nowFired){
@@ -191,17 +237,14 @@ public class Runner implements NativeKeyListener , ActionListener, WindowListene
 			if(l<=5000 && a.getForeground()!=this.DANGERCOLOR){
 				a.setForeground(this.DANGERCOLOR);
 			}
-			if(l<=-5000 && a.getForeground()!=this.NULLCOLOR){
+			if(l<=-2000 && a.getForeground()!=this.NULLCOLOR){
 				a.setForeground(this.NULLCOLOR);
 			}
-			if(l<=-10000 && a.getForeground()==this.NULLCOLOR){
+			if(l<=-5000 && a.getForeground()==this.NULLCOLOR){
 				killTimer(i);
 			}
 		}
 	}
-	
-	@Override
-	public void nativeKeyReleased(NativeKeyEvent arg0) {}
 
 	@Override
 	public void nativeKeyTyped(NativeKeyEvent arg0) {}
